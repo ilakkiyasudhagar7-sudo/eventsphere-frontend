@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+@theme {
+  --color-page: #0d0812;
+  --color-card: #170f1f;
+  --color-edge: #2c2038;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-page);
+    color: #e5e7eb;
+    color-scheme: dark;
+  }
+  input,
+  select {
+    background-color: var(--color-card);
+    color: #f3f4f6;
+  }
+  input::placeholder {
+    color: #6b7280;
+  }
+  input:focus,
+  select:focus {
+    outline: 2px solid #ec4899;
+    outline-offset: 0;
+  }
+}
+
+/* chart text */
+.recharts-text {
+  fill: #9ca3af;
+}
+.recharts-legend-item-text {
+  color: #d1d5db !important;
+}
