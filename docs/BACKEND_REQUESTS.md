@@ -18,6 +18,10 @@ copies ApiServer.java, not against the real Java/Oracle backend.
    "quantity_sold" returns nothing). Is there an Oracle trigger that updates
    them? If not, please update them in the booking or payment transaction.
    Until then the frontend displays remaining = QuantityAvailable - QuantitySold.
+   4b. Payment handler (~lines 365-430) inserts only registration_id, amount and
+    payment_status, and does not update ticket counts. Method and transaction
+    reference are not stored, so the Payments page columns for them will be empty.
+    Please say if you plan to store them.
 
 ## Missing in the API (frontend shows "not available yet")
 5. EventCategory and Capacity in the events response.
