@@ -1,242 +1,165 @@
-// src/pages/Feedback.jsx
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { Star } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
-import { getMySessions, getAllFeedback, submitFeedback } from "../api/feedback";
+// src/pages/Connections.jsx
+import { useState } from "react";
+import { Users, UserCheck, UserPlus, Search, Sparkles, Check } from "lucide-react";
 
-const fmtDate = (d) => {
-  const date = new Date(d);
-  return isNaN(date) ? String(d) : date.toLocaleDateString("en-IN", { dateStyle: "medium" });
+const mockConnectionsData = {
+  myConnections: [
+    { ConnectionID: "c1", Name: "Judith Igdaliah Ebenezar", Email: "judith@example.com", Role: "Organizer" },
+    { ConnectionID: "c2", Name: "Preeti B R", Email: "preeti@example.com", Role: "Attendee" }
+  ],
+  incomingRequests: [
+    { ConnectionID: "c3", Name: "Rahul Sharma", Email: "rahul@example.com", Role: "Attendee" }
+  ],
+  recommendations: [
+    { AttendeeID: "a5", Name: "Ananya Iyer", Email: "ananya@example.com", MutualConnections: 2 },
+    { AttendeeID: "a6", Name: "Karthik Raja", Email: "karthik@example.com", MutualConnections: 3 }
+  ]
 };
-const fmtTime = (d) => {
-  const date = new Date(d);
-  return isNaN(date) ? String(d) : date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
-};
 
-function NotAvailable({ feature, detail }) {
-  return (
-    <div className="bg-card ring-1 ring-edge rounded-xl p-6">
-      <h2 className="text-white font-semibold mb-1">{feature} is not available yet</h2>
-      <p className="text-sm text-gray-400">
-        The backend does not provide this feature yet, so there is nothing to show here.
-        This page will work once the server supports it.
-      </p>
-      {detail && <p className="text-xs text-gray-600 mt-3">Technical detail: {detail}</p>}
-    </div>
-  );
-}
+export default function Connections() {
+  const [activeTab, setActiveTab] = useState("my-connections");
+  const [search, setSearch] = useState("");
+  const [data, setData] = useState(mockConnectionsData);
 
-function Stars({ value }) {
-  return (
-    <span className="inline-flex gap-0.5">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <Star key={n} size={14} className={n <= value ? "text-pink-400 fill-pink-400" : "text-gray-600"} />
-      ))}
-    </span>
-  );
-}
-
-function StarPicker({ value, onChange }) {
-  return (
-    <span className="inline-flex gap-1">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button key={n} type="button" onClick={() => onChange(n)} aria-label={`${n} stars`}>
-          <Star
-            size={24}
-            className={n <= value ? "text-pink-400 fill-pink-400" : "text-gray-600 hover:text-pink-300"}
-          />
-        </button>
-      ))}
-    </span>
-  );
-}
-
-function SessionCard({ s, onSubmitted }) {
-  const [rating, setRating] = useState(0);
-  const [comments, setComments] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setSaving(true);
-    try {
-      await submitFeedback(s.SessionID, { Rating: rating, Comments: comments });
-      onSubmitted();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
+  const handleAccept = (connId) => {
+    setData((prev) => {
+      const conn = prev.incomingRequests.find((r) => r.ConnectionID === connId);
+      return {
+        ...prev,
+        incomingRequests: prev.incomingRequests.filter((r) => r.ConnectionID !== connId),
+        myConnections: conn ? [...prev.myConnections, conn] : prev.myConnections
+      };
+    });
   };
 
-  return (
-    <div className="bg-card ring-1 ring-edge rounded-xl p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h3 className="text-white font-medium">{s.SessionTitle}</h3>
-          <p className="text-xs text-gray-400">
-            {s.EventTitle} - {fmtTime(s.StartTime)}
-          </p>
-        </div>
-        <span className="text-xs px-2 py-0.5 rounded-full bg-pink-500/15 text-pink-300">{s.SessionType}</span>
-      </div>
+  const handleConnect = (attendeeId) => {
+    setData((prev) => ({
+      ...prev,
+      recommendations: prev.recommendations.filter((r) => r.AttendeeID !== attendeeId)
+    }));
+  };
 
-      {s.MyFeedback ? (
-        <div className="mt-3 border-t border-edge pt-3 text-sm">
-          <div className="flex items-center justify-between">
-            <Stars value={s.MyFeedback.Rating} />
-            <span className="text-xs text-emerald-300">Submitted {fmtDate(s.MyFeedback.FeedbackDate)}</span>
-          </div>
-          {s.MyFeedback.Comments && <p className="text-gray-300 mt-1">{s.MyFeedback.Comments}</p>}
+  const filteredConnections = data.myConnections.filter((c) =>
+    c.Name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-white">Networking & Connections</h1>
+          <p className="text-sm text-gray-400">Connect with attendees and organizers</p>
         </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="mt-3 border-t border-edge pt-3 space-y-3">
-          {error && (
-            <div className="text-sm text-red-300 bg-red-500/10 ring-1 ring-red-500/30 rounded-lg px-3 py-2">
-              {error}
-            </div>
-          )}
-          <StarPicker value={rating} onChange={setRating} />
-          <textarea
-            value={comments}
-            onChange={(e) => setComments(e.target.value)}
-            rows={2}
-            placeholder="Comments (optional)"
-            className="w-full px-3 py-2 rounded-lg ring-1 ring-edge text-sm bg-card text-gray-100"
-          />
+
+        <div className="flex items-center gap-2 bg-card ring-1 ring-edge p-1 rounded-xl text-sm">
           <button
-            type="submit"
-            disabled={saving || rating === 0}
-            className="px-4 py-1.5 rounded-lg bg-pink-600 hover:bg-pink-500 disabled:opacity-50 text-white text-sm transition"
+            onClick={() => setActiveTab("my-connections")}
+            className={`px-3 py-1.5 rounded-lg transition font-medium ${
+              activeTab === "my-connections" ? "bg-pink-600 text-white" : "text-gray-400 hover:text-white"
+            }`}
           >
-            {saving ? "Submitting..." : "Submit feedback"}
+            My Connections ({data.myConnections.length})
           </button>
-        </form>
-      )}
-    </div>
-  );
-}
-
-function AttendeeView() {
-  const [sessions, setSessions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
-
-  const load = async () => {
-    setLoadError("");
-    try {
-      const data = await getMySessions();
-      setSessions(Array.isArray(data) ? data : []);
-    } catch (err) {
-      setLoadError(err.message || "Request failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  if (loading) return <p className="text-gray-500">Loading sessions...</p>;
-
-  if (loadError) return <NotAvailable feature="Session feedback" detail={loadError} />;
-
-  if (sessions.length === 0) {
-    return (
-      <div className="bg-card ring-1 ring-edge rounded-xl p-6 text-gray-400">
-        You can give feedback on sessions of events you've registered for. You have none yet.{" "}
-        <Link to="/registrations" className="text-pink-400 hover:text-pink-300">
-          Register for an event
-        </Link>
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      {sessions.map((s) => (
-        <SessionCard key={s.SessionID} s={s} onSubmitted={load} />
-      ))}
-    </div>
-  );
-}
-
-function OrganizerView() {
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
-
-  useEffect(() => {
-    getAllFeedback()
-      .then((r) => setRows(Array.isArray(r) ? r : []))
-      .catch((err) => setLoadError(err.message || "Request failed"))
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) return <p className="text-gray-500">Loading feedback...</p>;
-
-  if (loadError) return <NotAvailable feature="Feedback" detail={loadError} />;
-
-  const avg = rows.length ? rows.reduce((a, r) => a + r.Rating, 0) / rows.length : 0;
-
-  return (
-    <div>
-      <div className="bg-card ring-1 ring-edge rounded-xl p-4 mb-4 flex items-center gap-4">
-        <div>
-          <p className="text-xs text-gray-400">Average rating</p>
-          <p className="text-2xl font-semibold text-white">{rows.length ? avg.toFixed(1) : "-"}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-400">Total responses</p>
-          <p className="text-2xl font-semibold text-white">{rows.length}</p>
+          <button
+            onClick={() => setActiveTab("requests")}
+            className={`px-3 py-1.5 rounded-lg transition font-medium flex items-center gap-1.5 ${
+              activeTab === "requests" ? "bg-pink-600 text-white" : "text-gray-400 hover:text-white"
+            }`}
+          >
+            Requests ({data.incomingRequests.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("discover")}
+            className={`px-3 py-1.5 rounded-lg transition font-medium flex items-center gap-1.5 ${
+              activeTab === "discover" ? "bg-pink-600 text-white" : "text-gray-400 hover:text-white"
+            }`}
+          >
+            <Sparkles size={14} /> Discover
+          </button>
         </div>
       </div>
 
-      <div className="bg-card ring-1 ring-edge rounded-xl overflow-x-auto">
-        <table className="w-full text-sm text-left">
-          <thead className="text-gray-400 border-b border-edge">
-            <tr>
-              <th className="px-4 py-3 font-medium">Event</th>
-              <th className="px-4 py-3 font-medium">Session</th>
-              <th className="px-4 py-3 font-medium">Rating</th>
-              <th className="px-4 py-3 font-medium">Comments</th>
-              <th className="px-4 py-3 font-medium">Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((f) => (
-              <tr key={f.FeedbackID} className="border-b border-edge last:border-0 hover:bg-white/5">
-                <td className="px-4 py-3 text-gray-300">{f.EventTitle}</td>
-                <td className="px-4 py-3 text-gray-300">{f.SessionTitle}</td>
-                <td className="px-4 py-3"><Stars value={f.Rating} /></td>
-                <td className="px-4 py-3 text-gray-300">{f.Comments}</td>
-                <td className="px-4 py-3 text-gray-400">{fmtDate(f.FeedbackDate)}</td>
-              </tr>
+      {activeTab === "my-connections" && (
+        <div className="space-y-4">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-2.5 text-gray-500" size={16} />
+            <input
+              type="text"
+              placeholder="Search connections..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 rounded-xl ring-1 ring-edge bg-card text-sm text-gray-100 focus:outline-none"
+            />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            {filteredConnections.map((c) => (
+              <div key={c.ConnectionID} className="bg-card ring-1 ring-edge rounded-xl p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-pink-600/20 text-pink-300 ring-1 ring-pink-500/30 flex items-center justify-center font-semibold text-sm">
+                    {c.Name.charAt(0)}
+                  </div>
+                  <div>
+                    <h3 className="text-white font-medium text-sm">{c.Name}</h3>
+                    <p className="text-xs text-gray-400">{c.Email}</p>
+                  </div>
+                </div>
+                <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 flex items-center gap-1">
+                  <UserCheck size={12} /> Connected
+                </span>
+              </div>
             ))}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                  No feedback yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
+          </div>
+        </div>
+      )}
 
-export default function Feedback() {
-  const { user } = useAuth();
-  return (
-    <div>
-      <h1 className="text-2xl font-semibold text-white mb-6">Feedback</h1>
-      {user.role === "Organizer" ? <OrganizerView /> : <AttendeeView />}
+      {activeTab === "requests" && (
+        <div className="grid gap-4 md:grid-cols-2">
+          {data.incomingRequests.map((r) => (
+            <div key={r.ConnectionID} className="bg-card ring-1 ring-edge rounded-xl p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30 flex items-center justify-center font-semibold text-sm">
+                  {r.Name.charAt(0)}
+                </div>
+                <div>
+                  <h3 className="text-white font-medium text-sm">{r.Name}</h3>
+                  <p className="text-xs text-gray-400">Connection Request</p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleAccept(r.ConnectionID)}
+                className="p-1.5 rounded-lg bg-pink-600 hover:bg-pink-500 text-white transition"
+              >
+                <Check size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {activeTab === "discover" && (
+        <div className="grid gap-4 md:grid-cols-2">
+          {data.recommendations.map((rec) => (
+            <div key={rec.AttendeeID} className="bg-card ring-1 ring-edge rounded-xl p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-purple-600/20 text-purple-300 ring-1 ring-purple-500/30 flex items-center justify-center font-semibold text-sm">
+                  {rec.Name.charAt(0)}
+                </div>
+                <div>
+                  <h3 className="text-white font-medium text-sm">{rec.Name}</h3>
+                  <p className="text-xs text-gray-400">{rec.MutualConnections} mutual connections</p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleConnect(rec.AttendeeID)}
+                className="px-3 py-1.5 rounded-lg bg-pink-600 hover:bg-pink-500 text-white text-xs font-medium transition flex items-center gap-1"
+              >
+                <UserPlus size={14} /> Connect
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
