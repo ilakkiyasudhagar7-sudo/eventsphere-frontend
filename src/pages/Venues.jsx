@@ -3,19 +3,30 @@ import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { getVenues, addVenue } from "../api/venues";
 
+// Set to true once the backend has a "create venue" endpoint and venues.js calls it.
+const CREATE_AVAILABLE = false;
+
 const emptyForm = { VenueName: "", Address: "", City: "", State: "", Country: "India", Capacity: "" };
 
 export default function Venues() {
   const [venues, setVenues] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null); // { type: "ok" | "error", text }
 
   const load = async () => {
-    setVenues(await getVenues());
-    setLoading(false);
+    setLoadError("");
+    try {
+      const data = await getVenues();
+      setVenues(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setLoadError(err.message || "Could not load venues");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -26,6 +37,7 @@ export default function Venues() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!CREATE_AVAILABLE) return;
     setMsg(null);
     setSaving(true);
     try {
@@ -71,8 +83,20 @@ export default function Venues() {
         </div>
       )}
 
+      {loadError && (
+        <div className="mb-4 text-sm text-red-300 bg-red-500/10 ring-1 ring-red-500/30 rounded-lg px-3 py-2">
+          Could not load venues: {loadError}
+        </div>
+      )}
+
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-card ring-1 ring-edge rounded-xl p-5 mb-6 space-y-4">
+          {!CREATE_AVAILABLE && (
+            <div className="text-sm text-pink-300 bg-pink-500/10 ring-1 ring-pink-500/30 rounded-lg px-3 py-2">
+              Adding venues is not available yet. The backend has no endpoint for creating venues,
+              so nothing can be saved from this form.
+            </div>
+          )}
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Venue name</label>
@@ -110,7 +134,7 @@ export default function Venues() {
           </div>
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || !CREATE_AVAILABLE}
             className="px-5 py-2 rounded-lg bg-pink-600 hover:bg-pink-500 disabled:opacity-60 text-white text-sm font-medium transition"
           >
             {saving ? "Saving..." : "Save venue"}
@@ -144,12 +168,12 @@ export default function Venues() {
                   <td className="px-4 py-3 text-white font-medium">{v.VenueName}</td>
                   <td className="px-4 py-3 text-gray-300">{v.Address}</td>
                   <td className="px-4 py-3 text-gray-300">{v.City}</td>
-                  <td className="px-4 py-3 text-gray-300">{v.State}</td>
-                  <td className="px-4 py-3 text-gray-300">{v.Country}</td>
+                  <td className="px-4 py-3 text-gray-300">{v.State ?? "—"}</td>
+                  <td className="px-4 py-3 text-gray-300">{v.Country ?? "—"}</td>
                   <td className="px-4 py-3 text-pink-300">{v.Capacity}</td>
                 </tr>
               ))}
-            {!loading && venues.length === 0 && (
+            {!loading && !loadError && venues.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-4 py-8 text-center text-gray-500">No venues yet.</td>
               </tr>

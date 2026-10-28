@@ -5,6 +5,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
 import StatCard from '../components/StatCard'
+import NotAvailable from '../components/NotAvailable'
 import { getOverview } from '../api/stats'
 
 const PIE_COLORS = ['#6b7280', '#f472b6', '#34d399', '#c026d3', '#f87171']
@@ -23,14 +24,14 @@ export default function Dashboard() {
   useEffect(() => {
     getOverview()
       .then(setData)
-      .catch((err) => setError(err.message))
+      .catch((err) => setError(err.message || 'Request failed'))
   }, [])
 
   if (error) {
     return (
       <div>
         <h2 className="text-2xl font-bold text-gray-100 mb-6">Dashboard</h2>
-        <p className="text-red-300">{error}</p>
+        <NotAvailable feature="Dashboard statistics" detail={error} />
       </div>
     )
   }

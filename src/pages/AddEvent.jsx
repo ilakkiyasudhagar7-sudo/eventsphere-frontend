@@ -5,6 +5,9 @@ import { ArrowLeft, AlertTriangle } from "lucide-react";
 import { getVenues } from "../api/venues";
 import { createEvent } from "../api/events";
 
+// Set to true once the backend has a "create event" endpoint and events.js calls it.
+const CREATE_AVAILABLE = false;
+
 const emptyForm = {
   EventTitle: "",
   EventDescription: "",
@@ -22,9 +25,12 @@ export default function AddEvent() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [venuesError, setVenuesError] = useState("");
 
   useEffect(() => {
-    getVenues().then(setVenues);
+    getVenues()
+      .then((v) => setVenues(Array.isArray(v) ? v : []))
+      .catch((err) => setVenuesError(err.message || "Could not load venues"));
   }, []);
 
   const set = (field) => (e) => setForm({ ...form, [field]: e.target.value });
@@ -34,6 +40,7 @@ export default function AddEvent() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!CREATE_AVAILABLE) return;
     setError("");
     setSaving(true);
     try {
@@ -56,6 +63,19 @@ export default function AddEvent() {
       <h1 className="text-2xl font-semibold text-white mb-6">Add event</h1>
 
       <form onSubmit={handleSubmit} className="bg-card ring-1 ring-edge rounded-xl p-6 space-y-4">
+        {!CREATE_AVAILABLE && (
+          <div className="text-sm text-pink-300 bg-pink-500/10 ring-1 ring-pink-500/30 rounded-lg px-3 py-2">
+            Creating events is not available yet. The backend has no endpoint for creating events,
+            so nothing can be saved from this form.
+          </div>
+        )}
+
+        {venuesError && (
+          <div className="text-sm text-red-300 bg-red-500/10 ring-1 ring-red-500/30 rounded-lg px-3 py-2">
+            Could not load venues: {venuesError}
+          </div>
+        )}
+
         {error && (
           <div className="text-sm text-red-300 bg-red-500/10 ring-1 ring-red-500/30 rounded-lg px-3 py-2">
             {error}
@@ -168,7 +188,7 @@ export default function AddEvent() {
 
         <button
           type="submit"
-          disabled={saving || overCapacity}
+          disabled={saving || overCapacity || !CREATE_AVAILABLE}
           className="px-5 py-2 rounded-lg bg-pink-600 hover:bg-pink-500 disabled:opacity-50 text-white text-sm font-medium transition"
         >
           {saving ? "Creating..." : "Create event"}
