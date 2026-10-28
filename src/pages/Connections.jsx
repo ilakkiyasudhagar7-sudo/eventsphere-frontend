@@ -1,181 +1,242 @@
-// src/pages/Connections.jsx
+// src/pages/Feedback.jsx
 import { useEffect, useState } from "react";
-import { Check, X, UserPlus } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Star } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import {
-  getMyConnections,
-  getAttendeeDirectory,
-  sendRequest,
-  respondToRequest,
-} from "../api/connections";
+import { getMySessions, getAllFeedback, submitFeedback } from "../api/feedback";
 
 const fmtDate = (d) => {
   const date = new Date(d);
   return isNaN(date) ? String(d) : date.toLocaleDateString("en-IN", { dateStyle: "medium" });
 };
-
-const pillCls = {
-  Pending: "bg-pink-500/15 text-pink-300",
-  Accepted: "bg-emerald-500/15 text-emerald-300",
-  Rejected: "bg-red-500/15 text-red-300",
+const fmtTime = (d) => {
+  const date = new Date(d);
+  return isNaN(date) ? String(d) : date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
 };
 
-function Pill({ status }) {
+function NotAvailable({ feature, detail }) {
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full ${pillCls[status] || "bg-white/10 text-gray-300"}`}>
-      {status}
+    <div className="bg-card ring-1 ring-edge rounded-xl p-6">
+      <h2 className="text-white font-semibold mb-1">{feature} is not available yet</h2>
+      <p className="text-sm text-gray-400">
+        The backend does not provide this feature yet, so there is nothing to show here.
+        This page will work once the server supports it.
+      </p>
+      {detail && <p className="text-xs text-gray-600 mt-3">Technical detail: {detail}</p>}
+    </div>
+  );
+}
+
+function Stars({ value }) {
+  return (
+    <span className="inline-flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Star key={n} size={14} className={n <= value ? "text-pink-400 fill-pink-400" : "text-gray-600"} />
+      ))}
     </span>
   );
 }
 
-function PersonRow({ p, note, children }) {
+function StarPicker({ value, onChange }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 py-3 border-b border-edge last:border-0">
-      <div>
-        <p className="text-white font-medium">{p ? p.FullName : "Unknown"}</p>
-        <p className="text-xs text-gray-400">
-          {p ? `${p.Profession} at ${p.Organisation}, ${p.City}` : ""}
-        </p>
-        {note && <p className="text-xs text-gray-500 mt-0.5">{note}</p>}
+    <span className="inline-flex gap-1">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button key={n} type="button" onClick={() => onChange(n)} aria-label={`${n} stars`}>
+          <Star
+            size={24}
+            className={n <= value ? "text-pink-400 fill-pink-400" : "text-gray-600 hover:text-pink-300"}
+          />
+        </button>
+      ))}
+    </span>
+  );
+}
+
+function SessionCard({ s, onSubmitted }) {
+  const [rating, setRating] = useState(0);
+  const [comments, setComments] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSaving(true);
+    try {
+      await submitFeedback(s.SessionID, { Rating: rating, Comments: comments });
+      onSubmitted();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-card ring-1 ring-edge rounded-xl p-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="text-white font-medium">{s.SessionTitle}</h3>
+          <p className="text-xs text-gray-400">
+            {s.EventTitle} - {fmtTime(s.StartTime)}
+          </p>
+        </div>
+        <span className="text-xs px-2 py-0.5 rounded-full bg-pink-500/15 text-pink-300">{s.SessionType}</span>
       </div>
-      <div className="flex items-center gap-2">{children}</div>
+
+      {s.MyFeedback ? (
+        <div className="mt-3 border-t border-edge pt-3 text-sm">
+          <div className="flex items-center justify-between">
+            <Stars value={s.MyFeedback.Rating} />
+            <span className="text-xs text-emerald-300">Submitted {fmtDate(s.MyFeedback.FeedbackDate)}</span>
+          </div>
+          {s.MyFeedback.Comments && <p className="text-gray-300 mt-1">{s.MyFeedback.Comments}</p>}
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="mt-3 border-t border-edge pt-3 space-y-3">
+          {error && (
+            <div className="text-sm text-red-300 bg-red-500/10 ring-1 ring-red-500/30 rounded-lg px-3 py-2">
+              {error}
+            </div>
+          )}
+          <StarPicker value={rating} onChange={setRating} />
+          <textarea
+            value={comments}
+            onChange={(e) => setComments(e.target.value)}
+            rows={2}
+            placeholder="Comments (optional)"
+            className="w-full px-3 py-2 rounded-lg ring-1 ring-edge text-sm bg-card text-gray-100"
+          />
+          <button
+            type="submit"
+            disabled={saving || rating === 0}
+            className="px-4 py-1.5 rounded-lg bg-pink-600 hover:bg-pink-500 disabled:opacity-50 text-white text-sm transition"
+          >
+            {saving ? "Submitting..." : "Submit feedback"}
+          </button>
+        </form>
+      )}
     </div>
   );
 }
 
-function Section({ title, count, children, empty }) {
-  return (
-    <div className="bg-card ring-1 ring-edge rounded-xl p-5">
-      <h2 className="text-white font-semibold mb-2">
-        {title} <span className="text-gray-500 font-normal text-sm">({count})</span>
-      </h2>
-      {count === 0 ? <p className="text-sm text-gray-500 py-2">{empty}</p> : children}
-    </div>
-  );
-}
-
-export default function Connections() {
-  const { user } = useAuth();
-  const me = user.AttendeeID;
-
-  const [connections, setConnections] = useState([]);
-  const [directory, setDirectory] = useState([]);
+function AttendeeView() {
+  const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(null);
-  const [msg, setMsg] = useState(null); // { type: "ok" | "error", text }
+  const [loadError, setLoadError] = useState("");
 
   const load = async () => {
-    const [c, d] = await Promise.all([getMyConnections(), getAttendeeDirectory()]);
-    setConnections(c);
-    setDirectory(d);
-    setLoading(false);
+    setLoadError("");
+    try {
+      const data = await getMySessions();
+      setSessions(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setLoadError(err.message || "Request failed");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     load();
   }, []);
 
-  const run = async (key, fn, okText) => {
-    setBusy(key);
-    setMsg(null);
-    try {
-      await fn();
-      setMsg({ type: "ok", text: okText });
-      await load();
-    } catch (err) {
-      setMsg({ type: "error", text: err.message });
-    } finally {
-      setBusy(null);
-    }
-  };
+  if (loading) return <p className="text-gray-500">Loading sessions...</p>;
 
-  const incoming = connections.filter(
-    (c) => c.ReceiverAttendeeID === me && c.ConnectionStatus === "Pending"
-  );
-  const sent = connections.filter((c) => c.RequesterAttendeeID === me);
-  const accepted = connections.filter((c) => c.ConnectionStatus === "Accepted");
-  const connectedIds = new Set(
-    connections.map((c) => (c.RequesterAttendeeID === me ? c.ReceiverAttendeeID : c.RequesterAttendeeID))
-  );
-  const suggestions = directory.filter((p) => !connectedIds.has(p.AttendeeID));
+  if (loadError) return <NotAvailable feature="Session feedback" detail={loadError} />;
 
-  const btn = "inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm disabled:opacity-50 transition";
+  if (sessions.length === 0) {
+    return (
+      <div className="bg-card ring-1 ring-edge rounded-xl p-6 text-gray-400">
+        You can give feedback on sessions of events you've registered for. You have none yet.{" "}
+        <Link to="/registrations" className="text-pink-400 hover:text-pink-300">
+          Register for an event
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      {sessions.map((s) => (
+        <SessionCard key={s.SessionID} s={s} onSubmitted={load} />
+      ))}
+    </div>
+  );
+}
+
+function OrganizerView() {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    getAllFeedback()
+      .then((r) => setRows(Array.isArray(r) ? r : []))
+      .catch((err) => setLoadError(err.message || "Request failed"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <p className="text-gray-500">Loading feedback...</p>;
+
+  if (loadError) return <NotAvailable feature="Feedback" detail={loadError} />;
+
+  const avg = rows.length ? rows.reduce((a, r) => a + r.Rating, 0) / rows.length : 0;
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-white mb-6">Connections</h1>
-
-      {msg && (
-        <div
-          className={`mb-4 text-sm rounded-lg px-3 py-2 ring-1 ${
-            msg.type === "ok"
-              ? "text-emerald-300 bg-emerald-500/10 ring-emerald-500/30"
-              : "text-red-300 bg-red-500/10 ring-red-500/30"
-          }`}
-        >
-          {msg.text}
+      <div className="bg-card ring-1 ring-edge rounded-xl p-4 mb-4 flex items-center gap-4">
+        <div>
+          <p className="text-xs text-gray-400">Average rating</p>
+          <p className="text-2xl font-semibold text-white">{rows.length ? avg.toFixed(1) : "-"}</p>
         </div>
-      )}
-
-      {loading ? (
-        <p className="text-gray-500">Loading connections...</p>
-      ) : (
-        <div className="grid gap-5 lg:grid-cols-2">
-          <Section title="Incoming requests" count={incoming.length} empty="No pending requests.">
-            {incoming.map((c) => (
-              <PersonRow key={c.ConnectionID} p={c.Requester} note={`Requested ${fmtDate(c.RequestedAt)}`}>
-                <button
-                  disabled={busy === c.ConnectionID}
-                  onClick={() => run(c.ConnectionID, () => respondToRequest(c.ConnectionID, "Accepted"), "Request accepted")}
-                  className={`${btn} bg-pink-600 hover:bg-pink-500 text-white`}
-                >
-                  <Check size={14} /> Accept
-                </button>
-                <button
-                  disabled={busy === c.ConnectionID}
-                  onClick={() => run(c.ConnectionID, () => respondToRequest(c.ConnectionID, "Rejected"), "Request rejected")}
-                  className={`${btn} ring-1 ring-edge text-gray-300 hover:bg-white/5`}
-                >
-                  <X size={14} /> Reject
-                </button>
-              </PersonRow>
-            ))}
-          </Section>
-
-          <Section title="My connections" count={accepted.length} empty="No connections yet.">
-            {accepted.map((c) => {
-              const other = c.RequesterAttendeeID === me ? c.Receiver : c.Requester;
-              return (
-                <PersonRow key={c.ConnectionID} p={other} note={`Connected ${fmtDate(c.RespondedAt)}`}>
-                  <Pill status="Accepted" />
-                </PersonRow>
-              );
-            })}
-          </Section>
-
-          <Section title="Sent requests" count={sent.length} empty="You haven't sent any requests.">
-            {sent.map((c) => (
-              <PersonRow key={c.ConnectionID} p={c.Receiver} note={`Sent ${fmtDate(c.RequestedAt)}`}>
-                <Pill status={c.ConnectionStatus} />
-              </PersonRow>
-            ))}
-          </Section>
-
-          <Section title="People you may know" count={suggestions.length} empty="You're connected with everyone.">
-            {suggestions.map((p) => (
-              <PersonRow key={p.AttendeeID} p={p}>
-                <button
-                  disabled={busy === "send-" + p.AttendeeID}
-                  onClick={() => run("send-" + p.AttendeeID, () => sendRequest(p.AttendeeID), `Request sent to ${p.FullName}`)}
-                  className={`${btn} ring-1 ring-pink-500/50 text-pink-300 hover:bg-pink-500/10`}
-                >
-                  <UserPlus size={14} /> Connect
-                </button>
-              </PersonRow>
-            ))}
-          </Section>
+        <div>
+          <p className="text-xs text-gray-400">Total responses</p>
+          <p className="text-2xl font-semibold text-white">{rows.length}</p>
         </div>
-      )}
+      </div>
+
+      <div className="bg-card ring-1 ring-edge rounded-xl overflow-x-auto">
+        <table className="w-full text-sm text-left">
+          <thead className="text-gray-400 border-b border-edge">
+            <tr>
+              <th className="px-4 py-3 font-medium">Event</th>
+              <th className="px-4 py-3 font-medium">Session</th>
+              <th className="px-4 py-3 font-medium">Rating</th>
+              <th className="px-4 py-3 font-medium">Comments</th>
+              <th className="px-4 py-3 font-medium">Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((f) => (
+              <tr key={f.FeedbackID} className="border-b border-edge last:border-0 hover:bg-white/5">
+                <td className="px-4 py-3 text-gray-300">{f.EventTitle}</td>
+                <td className="px-4 py-3 text-gray-300">{f.SessionTitle}</td>
+                <td className="px-4 py-3"><Stars value={f.Rating} /></td>
+                <td className="px-4 py-3 text-gray-300">{f.Comments}</td>
+                <td className="px-4 py-3 text-gray-400">{fmtDate(f.FeedbackDate)}</td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                  No feedback yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+export default function Feedback() {
+  const { user } = useAuth();
+  return (
+    <div>
+      <h1 className="text-2xl font-semibold text-white mb-6">Feedback</h1>
+      {user.role === "Organizer" ? <OrganizerView /> : <AttendeeView />}
     </div>
   );
 }
