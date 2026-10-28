@@ -1,4 +1,3 @@
-
 const API_BASE_URL = "http://localhost:5000/api";
 
 function getToken() {
@@ -9,33 +8,45 @@ function getToken() {
 async function request(endpoint, method = "GET", body = null) {
   const token = getToken();
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+  } catch {
+    throw new Error("Cannot reach the server. Please try again.");
+  }
 
-  const data = await response.json();
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    // response had no JSON body
+  }
 
   if (!response.ok) {
-    throw new Error(data.message || "Request failed");
+    throw new Error(data?.message || `Request failed (${response.status})`);
   }
 
   return data;
 }
 
+// Backend reads "ticketId" (camelCase). IDs are sent as strings because
+// the Java side parses JSON numbers as doubles ("3.0") and Integer.parseInt fails on that.
 export async function registerForTicket(ticketId) {
   return request("/registrations", "POST", {
-    TicketID: ticketId,
+    ticketId: String(ticketId),
   });
 }
 
 export async function processPayment(registrationId) {
   return request("/payments", "POST", {
-    RegistrationID: registrationId,
+    RegistrationID: String(registrationId),
   });
 }
 

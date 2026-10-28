@@ -5,9 +5,11 @@ import { getEvents } from '../api/events'
 import { useAuth } from '../context/AuthContext'
 import StatusBadge from '../components/StatusBadge'
 
+const upper = (v) => String(v ?? '').toUpperCase()
+
 export default function Registrations() {
   const { user } = useAuth()
-  const isAttendee = user?.role === 'Attendee'
+  const isAttendee = upper(user?.role) === 'ATTENDEE'
 
   const [openEvents, setOpenEvents] = useState([])
   const [eventId, setEventId] = useState(null)
@@ -24,7 +26,7 @@ export default function Registrations() {
     getEvents()
       .then((list) => {
         const open = list.filter((e) =>
-          ['Published', 'Ongoing'].includes(e.EventStatus)
+          ['PUBLISHED', 'ONGOING'].includes(upper(e.EventStatus))
         )
         setOpenEvents(open)
         if (open.length > 0) setEventId(open[0].EventID)
@@ -38,7 +40,9 @@ export default function Registrations() {
       if (eventId !== null) {
         setTickets(await getTickets(eventId))
       }
-      setMyRegs(await getMyRegistrations())
+      if (isAttendee) {
+        setMyRegs(await getMyRegistrations())
+      }
     } catch (err) {
       setMessage({ type: 'error', text: err.message })
     }
@@ -46,18 +50,24 @@ export default function Registrations() {
 
   useEffect(() => {
     refresh()
-  }, [eventId])
+  }, [eventId, isAttendee])
 
   async function handleRegister(ticket) {
     setBusy(true)
     setMessage(null)
     try {
       const reg = await registerForTicket(ticket.TicketID)
+      const event = openEvents.find((e) => e.EventID === eventId)
+      setPaying({
+        ...reg,
+        TicketType: ticket.TicketType,
+        Price: ticket.Price,
+        EventTitle: event?.EventTitle,
+      })
       setMessage({
         type: 'success',
         text: 'Successfully registered. Complete the payment to confirm.',
       })
-      setPaying(reg)
     } catch (err) {
       setMessage({ type: 'error', text: err.message })
     } finally {
@@ -69,14 +79,12 @@ export default function Registrations() {
   async function handlePay(e) {
     e.preventDefault()
     setBusy(true)
+    setMessage(null)
     try {
-      await processPayment(paying.RegistrationID, {
-        PaymentMethod: method,
-        TransactionReference: reference,
-      })
+      await processPayment(paying.RegistrationID)
       setMessage({
         type: 'success',
-        text: 'Successfully paid. Registration confirmed.',
+        text: 'Payment successful. Registration confirmed.',
       })
       setPaying(null)
       setReference('')
@@ -104,6 +112,13 @@ export default function Registrations() {
         </div>
       )}
 
+      {!isAttendee && (
+        <div className="bg-card ring-1 ring-edge rounded-xl p-5 mb-6 text-gray-400 text-sm">
+          Only attendees can register for tickets. The backend does not provide an
+          all-registrations list for organizers yet.
+        </div>
+      )}
+
       {isAttendee && (
         <div className="bg-card ring-1 ring-edge rounded-xl p-5 mb-6">
           {loading && <p className="text-gray-500">Loading events...</p>}
@@ -117,9 +132,7 @@ export default function Registrations() {
           {!loading && openEvents.length > 0 && (
             <>
               <div className="flex items-center gap-3 mb-4">
-                <label className="text-sm font-medium text-gray-300">
-                  Event
-                </label>
+                <label className="text-sm font-medium text-gray-300">Event</label>
                 <select
                   value={eventId ?? ''}
                   onChange={(e) => setEventId(Number(e.target.value))}
@@ -134,37 +147,26 @@ export default function Registrations() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {tickets.map((t) => (
-                  <div
-                    key={t.TicketID}
-                    className="border border-edge rounded-xl p-4"
-                  >
-                    <p className="font-semibold text-gray-100">
-                      {t.TicketType}
-                    </p>
-                    <p className="text-2xl font-bold text-pink-400 my-1">
-                      ₹{t.Price}
-                    </p>
-                    <p
-                      className={`text-sm mb-3 ${
-                        t.QuantityAvailable === 0
-                          ? 'text-red-400'
-                          : 'text-gray-400'
-                      }`}
-                    >
-                      {t.QuantityAvailable === 0
-                        ? 'Sold out'
-                        : `${t.QuantityAvailable} left`}
-                    </p>
-                    <button
-                      disabled={busy || t.QuantityAvailable === 0}
-                      onClick={() => handleRegister(t)}
-                      className="w-full py-2 rounded-lg bg-pink-600 text-white text-sm hover:bg-pink-700 disabled:opacity-50"
-                    >
-                      Register
-                    </button>
-                  </div>
-                ))}
+                {tickets.map((t) => {
+                  const remaining = Math.max(0, t.QuantityAvailable - (t.QuantitySold ?? 0))
+                  const soldOut = remaining <= 0
+                  return (
+                    <div key={t.TicketID} className="border border-edge rounded-xl p-4">
+                      <p className="font-semibold text-gray-100">{t.TicketType}</p>
+                      <p className="text-2xl font-bold text-pink-400 my-1">₹{t.Price}</p>
+                      <p className={`text-sm mb-3 ${soldOut ? 'text-red-400' : 'text-gray-400'}`}>
+                        {soldOut ? 'Sold out' : `${remaining} left`}
+                      </p>
+                      <button
+                        disabled={busy || soldOut}
+                        onClick={() => handleRegister(t)}
+                        className="w-full py-2 rounded-lg bg-pink-600 text-white text-sm hover:bg-pink-700 disabled:opacity-50"
+                      >
+                        {busy ? 'Please wait...' : 'Register'}
+                      </button>
+                    </div>
+                  )
+                })}
 
                 {tickets.length === 0 && (
                   <p className="text-gray-400">No tickets for this event.</p>
@@ -183,8 +185,10 @@ export default function Registrations() {
           <h3 className="font-semibold text-gray-200 mb-1">
             Pay for {paying.EventTitle} – {paying.TicketType}
           </h3>
-          <p className="text-sm text-gray-400 mb-4">
-            Amount: ₹{paying.Price}
+          <p className="text-sm text-gray-400 mb-1">Amount: ₹{paying.Price}</p>
+          <p className="text-xs text-amber-300/80 mb-4">
+            Simulated payment: no real money is charged, and the method and
+            reference below are not stored by the backend.
           </p>
 
           <div className="flex flex-wrap gap-3">
@@ -199,10 +203,9 @@ export default function Registrations() {
             </select>
 
             <input
-              required
               value={reference}
               onChange={(e) => setReference(e.target.value)}
-              placeholder="Transaction reference"
+              placeholder="Transaction reference (optional)"
               className="px-3 py-2 border border-edge rounded-lg text-sm"
             />
 
@@ -210,7 +213,7 @@ export default function Registrations() {
               disabled={busy}
               className="px-4 py-2 rounded-lg bg-pink-600 text-white text-sm hover:bg-pink-700 disabled:opacity-50"
             >
-              Pay now
+              {busy ? 'Processing...' : 'Pay now'}
             </button>
 
             <button
@@ -224,63 +227,56 @@ export default function Registrations() {
         </form>
       )}
 
-      <div className="bg-card ring-1 ring-edge rounded-xl overflow-x-auto">
-        <h3 className="font-semibold text-gray-200 p-5 pb-3">
-          {isAttendee ? 'My registrations' : 'All registrations'}
-        </h3>
+      {isAttendee && (
+        <div className="bg-card ring-1 ring-edge rounded-xl overflow-x-auto">
+          <h3 className="font-semibold text-gray-200 p-5 pb-3">My registrations</h3>
 
-        <table className="w-full text-sm text-left">
-          <thead className="bg-edge/40 text-gray-300">
-            <tr>
-              <th className="px-4 py-3">ID</th>
-              {!isAttendee && <th className="px-4 py-3">Attendee ID</th>}
-              <th className="px-4 py-3">Event</th>
-              <th className="px-4 py-3">Ticket</th>
-              <th className="px-4 py-3">Date</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3"></th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {myRegs.map((r) => (
-              <tr key={r.RegistrationID} className="border-t border-edge">
-                <td className="px-4 py-3">{r.RegistrationID}</td>
-                {!isAttendee && (
-                  <td className="px-4 py-3">{r.AttendeeID}</td>
-                )}
-                <td className="px-4 py-3 font-medium">{r.EventTitle}</td>
-                <td className="px-4 py-3">{r.TicketType}</td>
-                <td className="px-4 py-3">{r.RegistrationDate}</td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={r.RegistrationStatus} />
-                </td>
-                <td className="px-4 py-3">
-                  {isAttendee && r.RegistrationStatus === 'Pending' && (
-                    <button
-                      onClick={() => setPaying(r)}
-                      className="text-pink-400 hover:underline"
-                    >
-                      Pay
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-
-            {myRegs.length === 0 && (
+          <table className="w-full text-sm text-left">
+            <thead className="bg-edge/40 text-gray-300">
               <tr>
-                <td
-                  colSpan={isAttendee ? 6 : 7}
-                  className="px-4 py-8 text-center text-gray-400"
-                >
-                  No registrations yet
-                </td>
+                <th className="px-4 py-3">ID</th>
+                <th className="px-4 py-3">Event</th>
+                <th className="px-4 py-3">Ticket</th>
+                <th className="px-4 py-3">Date</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3"></th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+
+            <tbody>
+              {myRegs.map((r) => (
+                <tr key={r.RegistrationID} className="border-t border-edge">
+                  <td className="px-4 py-3">{r.RegistrationID}</td>
+                  <td className="px-4 py-3 font-medium">{r.EventTitle}</td>
+                  <td className="px-4 py-3">{r.TicketType}</td>
+                  <td className="px-4 py-3">{r.RegistrationDate}</td>
+                  <td className="px-4 py-3">
+                    <StatusBadge status={r.RegistrationStatus} />
+                  </td>
+                  <td className="px-4 py-3">
+                    {upper(r.RegistrationStatus) === 'PENDING' && (
+                      <button
+                        onClick={() => setPaying(r)}
+                        className="text-pink-400 hover:underline"
+                      >
+                        Pay
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+
+              {myRegs.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="px-4 py-8 text-center text-gray-400">
+                    No registrations yet
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }
