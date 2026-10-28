@@ -489,9 +489,10 @@ export default function EventDetail() {
             )}
 
             {tickets.map((t) => {
-              const remaining = Number(t.QuantityAvailable ?? 0);
+                            const stock = Number(t.QuantityAvailable ?? 0);
               const sold = Number(t.QuantitySold ?? 0);
-              const total = sold + remaining;
+              const remaining = Math.max(0, stock - sold);
+              const total = stock;
               const pct =
                 total > 0
                   ? Math.min(100, Math.round((sold / total) * 100))

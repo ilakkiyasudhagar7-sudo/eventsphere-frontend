@@ -31,7 +31,7 @@ export default function Events() {
   const filtered = events.filter((e) => {
     const q = query.toLowerCase();
     const matchesText =
-      e.EventTitle.toLowerCase().includes(q) || String(e.EventCategory).toLowerCase().includes(q);
+      e.EventTitle.toLowerCase().includes(q) || String(e.EventCategory ?? "").toLowerCase().includes(q);
     const matchesStatus = status === "All" || e.EventStatus === status;
     return matchesText && matchesStatus;
   });
@@ -103,10 +103,10 @@ export default function Events() {
                       {e.EventTitle}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-gray-300">{e.EventCategory}</td>
+                  <td className="px-4 py-3 text-gray-300">{e.EventCategory ?? "—"}</td>
                   <td className="px-4 py-3 text-gray-300">{fmtDate(e.StartDate)}</td>
                   <td className="px-4 py-3 text-gray-300">{fmtDate(e.EndDate)}</td>
-                  <td className="px-4 py-3 text-gray-300">{e.Capacity}</td>
+                  <td className="px-4 py-3 text-gray-300">{e.Capacity ?? "—"}</td>
                   <td className="px-4 py-3"><StatusBadge status={e.EventStatus} /></td>
                 </tr>
               ))}
