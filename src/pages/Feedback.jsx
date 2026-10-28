@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Star } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { getMySessions, getAllFeedback, submitFeedback } from "../api/feedback";
+import NotAvailable from "../components/NotAvailable";
 
 const fmtDate = (d) => {
   const date = new Date(d);
@@ -65,7 +66,7 @@ function SessionCard({ s, onSubmitted }) {
         <div>
           <h3 className="text-white font-medium">{s.SessionTitle}</h3>
           <p className="text-xs text-gray-400">
-            {s.EventTitle} · {fmtTime(s.StartTime)}
+            {s.EventTitle} - {fmtTime(s.StartTime)}
           </p>
         </div>
         <span className="text-xs px-2 py-0.5 rounded-full bg-pink-500/15 text-pink-300">{s.SessionType}</span>
@@ -110,10 +111,18 @@ function SessionCard({ s, onSubmitted }) {
 function AttendeeView() {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const load = async () => {
-    setSessions(await getMySessions());
-    setLoading(false);
+    setLoadError("");
+    try {
+      const data = await getMySessions();
+      setSessions(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setLoadError(err.message || "Request failed");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -121,6 +130,8 @@ function AttendeeView() {
   }, []);
 
   if (loading) return <p className="text-gray-500">Loading sessions...</p>;
+
+  if (loadError) return <NotAvailable feature="Session feedback" detail={loadError} />;
 
   if (sessions.length === 0) {
     return (
@@ -145,15 +156,18 @@ function AttendeeView() {
 function OrganizerView() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
-    getAllFeedback().then((r) => {
-      setRows(r);
-      setLoading(false);
-    });
+    getAllFeedback()
+      .then((r) => setRows(Array.isArray(r) ? r : []))
+      .catch((err) => setLoadError(err.message || "Request failed"))
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading) return <p className="text-gray-500">Loading feedback...</p>;
+
+  if (loadError) return <NotAvailable feature="Feedback" detail={loadError} />;
 
   const avg = rows.length ? rows.reduce((a, r) => a + r.Rating, 0) / rows.length : 0;
 
